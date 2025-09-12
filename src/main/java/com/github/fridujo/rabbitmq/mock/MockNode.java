@@ -148,7 +148,6 @@ public class MockNode implements ReceiverRegistry, TransactionalOperations {
         return receiver;
     }
 
-
     private MockExchange getExchangeUnchecked(String exchangeName) {
         if (!exchanges.containsKey(exchangeName)) {
             throw new IllegalArgumentException("No exchange named " + exchangeName);

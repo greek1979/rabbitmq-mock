@@ -254,7 +254,7 @@ public class MockQueue implements Receiver {
             List<Long> unackedDeliveryTags;
 
             synchronized(unackedDeliveryTagsByConsumerTag) {  // protects also the nested consumer tag set
-                unackedDeliveryTags = new ArrayList<>(unackedDeliveryTagsByConsumerTag.computeIfAbsent(consumerTag, k -> Collections.emptySet()));
+                unackedDeliveryTags = new ArrayList<>(unackedDeliveryTagsByConsumerTag.computeIfAbsent(consumerTag, k -> Set.of()));
             }
 
             unackedDeliveryTags.forEach(deliveryTag -> basicReject(deliveryTag, true));
