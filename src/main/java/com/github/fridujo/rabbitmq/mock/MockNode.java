@@ -140,10 +140,10 @@ public class MockNode implements ReceiverRegistry, TransactionalOperations {
     @Override
     public Optional<Receiver> getReceiver(ReceiverPointer receiverPointer) {
         final Optional<Receiver> receiver;
-        if (receiverPointer.type == ReceiverPointer.Type.EXCHANGE) {
-            receiver = Optional.ofNullable(exchanges.get(receiverPointer.name));
+        if (receiverPointer.type() == ReceiverPointer.Type.EXCHANGE) {
+            receiver = Optional.ofNullable(exchanges.get(receiverPointer.name()));
         } else {
-            receiver = Optional.ofNullable(queues.get(receiverPointer.name));
+            receiver = Optional.ofNullable(queues.get(receiverPointer.name()));
         }
         return receiver;
     }

@@ -906,11 +906,11 @@ class ChannelTest {
                 MockQueue mockQueue = channel.getQueue("fruits").get();
 
                 assertThat(mockQueue.getAvailableMessages())
-                    .extracting(m -> new String(m.body))
+                    .extracting(m -> new String(m.body()))
                     .containsOnly("banana");
 
                 assertThat(mockQueue.getUnackedMessages())
-                    .extracting(m -> new String(m.body))
+                    .extracting(m -> new String(m.body()))
                     .containsOnly("orange");
             }
         }
