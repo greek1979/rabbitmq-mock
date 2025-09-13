@@ -64,7 +64,7 @@ public class MockChannel implements Channel {
         
         this.directReplyToQueue = 
             node
-                .queueDeclare(generateIfEmpty(""),false, true, true, Map.of())
+                .queueDeclare(generateIfEmpty(""), false, true, true, Map.of(), this)
                 .getQueue();
 
         metricsCollectorWrapper.newChannel(this);
@@ -318,7 +318,7 @@ public class MockChannel implements Channel {
 
     @Override
     public AMQP.Queue.DeclareOk queueDeclare(String queue, boolean durable, boolean exclusive, boolean autoDelete, Map<String, Object> arguments) {
-        return node.queueDeclare(generateIfEmpty(queue), durable, exclusive, autoDelete, nullToEmpty(arguments));
+        return node.queueDeclare(generateIfEmpty(queue), durable, exclusive, autoDelete, nullToEmpty(arguments), this);
     }
 
     @Override
@@ -393,7 +393,7 @@ public class MockChannel implements Channel {
                 throw new IllegalStateException("direct reply-to requires autoAck");
             }
         }
-        
+
         GetResponse getResponse = node.basicGet(lastGeneratedIfEmpty(queue), autoAck, this::nextDeliveryTag);
         if (getResponse != null) {
             metricsCollectorWrapper.consumedMessage(this, getResponse.getEnvelope().getDeliveryTag(), autoAck);
@@ -508,7 +508,7 @@ public class MockChannel implements Channel {
                 throw new IllegalStateException("direct reply-to requires autoAck");
             }
         }
-        String serverConsumerTag = node.basicConsume(lastGeneratedIfEmpty(queue), autoAck, consumerTag, noLocal, exclusive, nullToEmpty(arguments), callback, this::nextDeliveryTag, mockConnection, this);
+        String serverConsumerTag = node.basicConsume(lastGeneratedIfEmpty(queue), autoAck, consumerTag, noLocal, exclusive, nullToEmpty(arguments), callback, this::nextDeliveryTag, this);
         metricsCollectorWrapper.basicConsume(this, serverConsumerTag, autoAck);
         return serverConsumerTag;
     }

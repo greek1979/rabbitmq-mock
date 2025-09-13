@@ -2,8 +2,13 @@ package com.github.fridujo.rabbitmq.mock;
 
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.AlreadyClosedException;
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.Consumer;
+import com.rabbitmq.client.DefaultConsumer;
+import com.rabbitmq.client.Envelope;
 import com.rabbitmq.client.impl.AMQConnection;
 import com.rabbitmq.client.impl.DefaultExceptionHandler;
 import com.rabbitmq.client.impl.LongStringHelper;
@@ -12,10 +17,14 @@ import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MockConnectionTest {
 
@@ -108,5 +117,110 @@ class MockConnectionTest {
             assertThatExceptionOfType(UnsupportedOperationException.class)
                 .isThrownBy(() -> connection.notifyListeners());
         }
+    }
+
+    private static final String EXCHANGE = "exchange";
+    private static final String QUEUE = "queue";
+
+    @Test
+    void exclusive_queue_cleanup() throws Exception {
+        MockConnectionFactory factory = new MockConnectionFactory();
+
+        try (Connection conn = factory.newConnection()) {
+            createQueueAndPublish(conn, true);
+        }
+
+        try (Connection conn2 = factory.newConnection()) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                readFromQueue(conn2);
+            });
+        }
+    }
+
+    @Test
+    void autoDelete_queue_cleanup() throws Exception {
+        MockConnectionFactory factory = new MockConnectionFactory();
+
+        try (Connection conn = factory.newConnection()) {
+            createQueueAndPublish(conn, false);
+            CompletableFuture<Void> future = readFromQueue(conn);
+            future.get(1000, TimeUnit.MILLISECONDS);
+        }
+
+        try (Connection conn2 = factory.newConnection()) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                readFromQueue(conn2);
+            });
+        }
+    }
+
+    @Test
+    void multiConnection_overlapping() throws Exception {
+        MockConnectionFactory factory = new MockConnectionFactory();
+
+        Connection conn = factory.newConnection();
+
+        try (Connection conn2 = factory.newConnection()) {
+            createQueueAndPublish(conn2, false);
+        }
+
+        CompletableFuture<Void> future = readFromQueue(conn);
+        future.get(1000, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
+    void multiConnection_sequential() throws Exception {
+        MockConnectionFactory factory = new MockConnectionFactory();
+
+        try (Connection conn = factory.newConnection()) {
+            createQueueAndPublish(conn, false);
+        }
+
+        try (Connection conn2 = factory.newConnection()) {
+            CompletableFuture<Void> future = readFromQueue(conn2);
+            future.get(1000, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    @Test
+    void singleConnection() throws Exception {
+        MockConnectionFactory factory = new MockConnectionFactory();
+
+        try (Connection conn = factory.newConnection()) {
+            createQueueAndPublish(conn, false);
+
+            CompletableFuture<Void> future = readFromQueue(conn);
+            future.get(1000, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private void createQueueAndPublish(Connection conn, boolean exclusive) throws IOException {
+        Channel channel = conn.createChannel();
+
+        channel.exchangeDeclare(EXCHANGE, BuiltinExchangeType.DIRECT, true);
+        channel.queueDeclare(QUEUE, false, exclusive, true, Map.of());
+        channel.queueBind(QUEUE, EXCHANGE, "");
+
+        channel.basicPublish(EXCHANGE, "", new AMQP.BasicProperties(), "hello".getBytes());
+    }
+
+    private CompletableFuture<Void> readFromQueue(Connection conn) throws IOException {
+        CompletableFuture<Void> future = new CompletableFuture<Void>();
+        Channel channel = conn.createChannel();
+
+        Consumer consumer = new DefaultConsumer(channel) {
+            @Override
+            public void handleDelivery(String consumerTag,
+                                       Envelope envelope,
+                                       AMQP.BasicProperties properties,
+                                       byte[] body) throws IOException {
+                future.complete(null);
+                super.handleDelivery(consumerTag, envelope, properties, body);
+            }
+        };
+
+        channel.basicConsume(QUEUE, true, consumer);
+
+        return future;
     }
 }

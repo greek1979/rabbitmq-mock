@@ -39,7 +39,7 @@ public class MockQueue implements Receiver {
     private final String name;
     private final ReceiverPointer pointer;
     private final AmqArguments arguments;
-    private final ReceiverRegistry receiverRegistry;
+    protected final ReceiverRegistry receiverRegistry;
     private final Queue<Message> messages;
     private final RestartableExecutorService executorService;
     private final Map<String, ConsumerAndTag> consumersByTag = Collections.synchronizedMap(new LinkedHashMap<>());
@@ -170,9 +170,12 @@ public class MockQueue implements Receiver {
         return pointer;
     }
 
-    public void basicConsume(String consumerTag, Consumer consumer, boolean autoAck, Supplier<Long> deliveryTagSupplier, MockConnection mockConnection, MockChannel mockChannel) {
+    public void basicConsume(String consumerTag, Consumer consumer, boolean autoAck, Supplier<Long> deliveryTagSupplier, MockChannel mockChannel) {
         LOGGER.debug(localized("registering consumer"));
-        consumersByTag.put(consumerTag, new ConsumerAndTag(consumerTag, consumer, autoAck, deliveryTagSupplier, mockConnection, mockChannel));
+        consumersByTag.put(consumerTag, new ConsumerAndTag(consumerTag, consumer, autoAck, deliveryTagSupplier, mockChannel));
+        if (mockChannel.isOpen()) {
+            restartDeliveryLoop();
+        }
         consumer.handleConsumeOk(consumerTag);
     }
 
@@ -275,7 +278,7 @@ public class MockQueue implements Receiver {
 
     void close(MockConnection mockConnection) {
         consumersByTag.entrySet().removeIf(e -> {
-            final boolean mustCancelConsumer = e.getValue().mockConnection == mockConnection;
+            final boolean mustCancelConsumer = e.getValue().mockChannel().getConnection() == mockConnection;
             if (mustCancelConsumer) {
                 cancel(e.getValue());
             }
@@ -434,7 +437,6 @@ public class MockQueue implements Receiver {
         return unackedMessages;
     }
 
-    static record ConsumerAndTag(String tag, Consumer consumer, boolean autoAck, Supplier<Long> deliveryTagSupplier,
-    	    MockConnection mockConnection, MockChannel mockChannel) {}
+    static record ConsumerAndTag(String tag, Consumer consumer, boolean autoAck, Supplier<Long> deliveryTagSupplier, MockChannel mockChannel) {}
 
 }

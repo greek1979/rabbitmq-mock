@@ -829,9 +829,10 @@ class ChannelTest {
                 params.channel(channel);
                 params.exchange("");
                 params.routingKey(queue);
-                RpcClient client = new RpcClient(params);
-                RpcClient.Response response = client.responseCall("ping".getBytes());
-                assertThat(response.getBody()).isEqualTo("pong".getBytes());
+                try (RpcClient client = new RpcClient(params)) {
+                    RpcClient.Response response = client.responseCall("ping".getBytes());
+                    assertThat(response.getBody()).isEqualTo("pong".getBytes());
+                }
             }
         }
     }
@@ -845,8 +846,7 @@ class ChannelTest {
                 params.exchange("");
                 params.routingKey("unexistingQueue");
                 params.useMandatory(true);
-                RpcClient client = new RpcClient(params);
-                try {
+                try (RpcClient client = new RpcClient(params)) {
                     client.responseCall("ping".getBytes());
                     fail("Expected exception");
                 } catch (UnroutableRpcRequestException e) {
