@@ -410,13 +410,13 @@ public class MockChannel implements Channel {
     @Override
     public void basicNack(long deliveryTag, boolean multiple, boolean requeue) {
         getTransactionOrNode().basicNack(deliveryTag, multiple, requeue);
-        metricsCollectorWrapper.basicNack(this, deliveryTag);
+        metricsCollectorWrapper.basicNack(this, deliveryTag, requeue);
     }
 
     @Override
     public void basicReject(long deliveryTag, boolean requeue) {
         getTransactionOrNode().basicReject(deliveryTag, requeue);
-        metricsCollectorWrapper.basicReject(this, deliveryTag);
+        metricsCollectorWrapper.basicReject(this, deliveryTag, requeue);
     }
 
     @Override
