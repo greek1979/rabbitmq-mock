@@ -77,52 +77,54 @@ public class MockQueue implements Receiver {
             LOGGER.debug(localized("shutting down"));
             return false;
         }
-        boolean delivered = false;
 
-        delivered = deadLetterFirstMessageIfExpired();
+        boolean delivered = deadLetterFirstMessageIfExpired();
 
         if (consumersByTag.size() > 0) {
             Message message = messages.poll();
-            if (message != null) {
-                if (message.isExpired()) {
-                    deadLetterWithReason(message, DeadLettering.ReasonType.EXPIRED);
-                } else {
-                    List<ConsumerAndTag> consumerAndTags = new ArrayList<>(consumersByTag.size());
-
-                    consumersByTag.values().forEach(consumerAndTags::add);  // iterates while synchronized
-
-                    int index = consumerRollingSequence.incrementAndGet() % consumerAndTags.size();
-                    ConsumerAndTag nextConsumer = consumerAndTags.get(index);
-                    long deliveryTag = nextConsumer.deliveryTagSupplier().get();
-
-                    unackedMessagesByDeliveryTag.put(deliveryTag, message);
-                    unackedDeliveryTagsByConsumerTag.compute(nextConsumer.tag(), (k, v) -> {  // manipulate the map, and its contained set while synchronized
-                        Set<Long> set = v == null ? new LinkedHashSet<>() : v;
-
-                        set.add(deliveryTag);
-
-                        return set;
-                    });
-
-                    Envelope envelope = new Envelope(deliveryTag,
-                        message.redelivered(),
-                        message.exchangeName(),
-                        message.routingKey());
-                    try {
-                        LOGGER.debug(localized("delivering message to consumer"));
-                        nextConsumer.mockChannel().getMetricsCollector().consumedMessage(nextConsumer.mockChannel(), deliveryTag, nextConsumer.tag());
-                        nextConsumer.consumer().handleDelivery(nextConsumer.tag(), envelope, message.props(), message.body());
-                        if (nextConsumer.autoAck()) {
-                            internal_removeFromUnacked(deliveryTag);
-                        }
-                        delivered = true;
-                    } catch (IOException e) {
-                        LOGGER.warn(localized("Unable to deliver message to consumer [" + nextConsumer.tag() + "]"));
-                        basicReject(deliveryTag, true);
-                    }
-                }
+            if (message == null) {
+                LOGGER.trace(localized("no messages to deliver to consumer"));
+            } else if (message.isExpired()) {
+                deadLetterWithReason(message, DeadLettering.ReasonType.EXPIRED);
             } else {
-                LOGGER.trace(localized("no consumer to deliver message to"));
+                List<ConsumerAndTag> consumerAndTags = new ArrayList<>(consumersByTag.size());
+
+                consumersByTag.values().forEach(consumerAndTags::add);  // iterates while synchronized
+
+                int index = consumerRollingSequence.incrementAndGet() % consumerAndTags.size();
+                ConsumerAndTag nextConsumer = consumerAndTags.get(index);
+                long deliveryTag = nextConsumer.deliveryTagSupplier().get();
+
+                unackedMessagesByDeliveryTag.put(deliveryTag, message);
+                unackedDeliveryTagsByConsumerTag.compute(nextConsumer.tag(), (k, v) -> {  // manipulate the map, and its contained set while synchronized
+                    Set<Long> set = v == null ? new LinkedHashSet<>() : v;
+
+                    set.add(deliveryTag);
+
+                    return set;
+                });
+
+                Envelope envelope = new Envelope(deliveryTag,
+                    message.redelivered(),
+                    message.exchangeName(),
+                    message.routingKey());
+                try {
+                    LOGGER.debug(localized("delivering message to consumer"));
+                    nextConsumer.mockChannel().getMetricsCollector().consumedMessage(nextConsumer.mockChannel(), deliveryTag, nextConsumer.tag());
+                    nextConsumer.consumer().handleDelivery(nextConsumer.tag(), envelope, message.props(), message.body());
+                    if (nextConsumer.autoAck()) {
+                        internal_removeFromUnacked(deliveryTag);
+                    }
+                    delivered = true;
+                } catch (IOException e) {
+                    LOGGER.warn(localized("Unable to deliver message to consumer [" + nextConsumer.tag() + "]"));
+                    basicReject(deliveryTag, true);
+                    delivered = false;
+                } catch (RuntimeException e) {
+                    LOGGER.warn(localized("Unable to deliver message to consumer [" + nextConsumer.tag() + "]"));
+                    basicReject(deliveryTag, true);
+                    delivered = false;
+                }
             }
         }
         return delivered;

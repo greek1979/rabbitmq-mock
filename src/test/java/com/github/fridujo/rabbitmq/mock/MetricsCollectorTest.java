@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -189,6 +190,7 @@ public class MetricsCollectorTest {
 
         try (MockConnection connection = mockConnectionFactory.newConnection();
             Channel channel = connection.createChannel(42)) {
+            connection.setId(UUID.randomUUID().toString());
 
             mockConnectionFactory.setMetricsCollector(new MicrometerMetricsCollector(registry));
 
